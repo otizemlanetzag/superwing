@@ -72,7 +72,7 @@ impl Engine{
   E::Unary(op,x)=>{let v=Self::expr(x,e)?;match op{Tok::Minus=>Ok(V::N(-v.num()?)),Tok::Bang=>Ok(V::B(!v.truth())),_=>unreachable!()}},
   E::Call(f,args)=>{let f=Self::expr(f,e.clone())?;let a=args.iter().map(|x|Self::expr(x,e.clone())).collect::<Result<Vec<_>,_>>()?;if let V::Fn(fun)=f{let local=Self::child(fun.env.clone());for(i,p)in fun.p.iter().enumerate(){Self::define(&local,p.clone(),a.get(i).cloned().unwrap_or(V::U));}match Self::run(&fun.b,local)?{Flow::Val(_)=>Ok(V::U),Flow::Ret(v)=>Ok(v)}}else{Err("TypeError: value is not callable".into())}},
   E::Bin(a,op,b)=>{let l=Self::expr(a,e.clone())?;let r=Self::expr(b,e)?;match op{
-   Tok::Plus if matches!(l,V::S(_))||matches!(r,V::S(_))=>Ok(V::S(format!("{}{}",l.show(),r.show()))),
+   Tok::Plus if matches!(&l,V::S(_))||matches!(&r,V::S(_))=>Ok(V::S(format!("{}{}",l.show(),r.show()))),
    Tok::Plus=>Ok(V::N(l.num()?+r.num()?)),Tok::Minus=>Ok(V::N(l.num()?-r.num()?)),Tok::Mul=>Ok(V::N(l.num()?*r.num()?)),Tok::Div=>Ok(V::N(l.num()?/r.num()?)),
    Tok::EqEq=>Ok(V::B(l.show()==r.show())),Tok::Ne=>Ok(V::B(l.show()!=r.show())),
    Tok::Lt=>Ok(V::B(l.num()?<r.num()?)),Tok::Gt=>Ok(V::B(l.num()?>r.num()?)),Tok::Le=>Ok(V::B(l.num()?<=r.num()?)),Tok::Ge=>Ok(V::B(l.num()?>=r.num()?)),_=>Err("Unsupported operator".into())
