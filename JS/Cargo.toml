@@ -1,0 +1,14 @@
+[package]
+name = "superwing-js"
+version = "0.1.0"
+edition = "2021"
+description = "An independent JavaScript engine written in Rust"
+license = "AGPL-3.0-only"
+
+[lib]
+name = "superwing_js"
+path = "src/lib.rs"
+
+[[bin]]
+name = "superwing-js"
+path = "src/main.rs"
