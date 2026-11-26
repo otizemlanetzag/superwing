@@ -1,7 +1,7 @@
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
 #[derive(Clone, Debug, PartialEq)]
-enum Tok { Num(f64), Str(String), Id(String), Let, Fn, Return, If, Else, Switch, Case, Default, While, Do, For, Break, Continue, Typeof, True, False, Null, Undef, Plus, Minus, Mul, Div, Mod, Eq, PlusEq, MinusEq, MulEq, DivEq, ModEq, Question, EqEq, Ne, StrictEq, StrictNe, And, Or, Lt, Gt, Le, Ge, Bang, Inc, Dec, Lp, Rp, Lb, Rb, Ls, Rs, Dot, Colon, Semi, Comma, Eof }
+enum Tok { Num(f64), Str(String), Id(String), Let, Fn, Return, If, Else, Switch, Case, Default, While, Do, For, Break, Continue, Typeof, True, False, Null, Undef, Plus, Minus, Mul, Div, Mod, Eq, PlusEq, MinusEq, MulEq, DivEq, ModEq, Question, Arrow, EqEq, Ne, StrictEq, StrictNe, And, Or, Lt, Gt, Le, Ge, Bang, Inc, Dec, Lp, Rp, Lb, Rb, Ls, Rs, Dot, Colon, Semi, Comma, Eof }
 
 fn lex(s: &str) -> Result<Vec<Tok>, String> {
     let c: Vec<char> = s.chars().collect(); let mut i=0; let mut out=vec![];
@@ -14,14 +14,14 @@ fn lex(s: &str) -> Result<Vec<Tok>, String> {
         let three=if i+2<c.len(){format!("{}{}{}",c[i],c[i+1],c[i+2])}else{String::new()};
         if three=="==="{out.push(Tok::StrictEq);i+=3;continue;} if three=="!=="{out.push(Tok::StrictNe);i+=3;continue;}
         let two=if i+1<c.len(){format!("{}{}",c[i],c[i+1])}else{String::new()};
-        if two=="+=" {out.push(Tok::PlusEq);i+=2;continue;} if two=="-=" {out.push(Tok::MinusEq);i+=2;continue;} if two=="*=" {out.push(Tok::MulEq);i+=2;continue;} if two=="/=" {out.push(Tok::DivEq);i+=2;continue;} if two=="%=" {out.push(Tok::ModEq);i+=2;continue;} if two=="&&"{out.push(Tok::And);i+=2;continue;} if two=="||"{out.push(Tok::Or);i+=2;continue;}
+        if two=="=>" {out.push(Tok::Arrow);i+=2;continue;} if two=="+=" {out.push(Tok::PlusEq);i+=2;continue;} if two=="-=" {out.push(Tok::MinusEq);i+=2;continue;} if two=="*=" {out.push(Tok::MulEq);i+=2;continue;} if two=="/=" {out.push(Tok::DivEq);i+=2;continue;} if two=="%=" {out.push(Tok::ModEq);i+=2;continue;} if two=="&&"{out.push(Tok::And);i+=2;continue;} if two=="||"{out.push(Tok::Or);i+=2;continue;}
         if two=="==" {out.push(Tok::EqEq);i+=2;continue;} if two=="!=" {out.push(Tok::Ne);i+=2;continue;} if two=="<=" {out.push(Tok::Le);i+=2;continue;} if two==">=" {out.push(Tok::Ge);i+=2;continue;} if two=="++" {out.push(Tok::Inc);i+=2;continue;} if two=="--" {out.push(Tok::Dec);i+=2;continue;}
         out.push(match c[i]{'+'=>Tok::Plus,'-'=>Tok::Minus,'*'=>Tok::Mul,'/'=>Tok::Div,'%'=>Tok::Mod,'?'=>Tok::Question,'='=>Tok::Eq,'<'=>Tok::Lt,'>'=>Tok::Gt,'!'=>Tok::Bang,'('=>Tok::Lp,')'=>Tok::Rp,'{'=>Tok::Lb,'}'=>Tok::Rb,'['=>Tok::Ls,']'=>Tok::Rs,';'=>Tok::Semi,','=>Tok::Comma,'.'=>Tok::Dot,':'=>Tok::Colon,x=>return Err(format!("Unexpected character: {x}"))});i+=1;
     } out.push(Tok::Eof); Ok(out)
 }
 
 #[derive(Clone)]
-enum E { N(f64), S(String), B(bool), Null, U, Var(String), Typeof(Box<E>), Update(String,i8,bool), Array(Vec<E>), Object(Vec<(String,E)>), Index(Box<E>,Box<E>), Property(Box<E>,String), SetIndex(Box<E>,Box<E>,Box<E>), SetProperty(Box<E>,String,Box<E>), Unary(Tok,Box<E>), Bin(Box<E>,Tok,Box<E>), Conditional(Box<E>,Box<E>,Box<E>), Set(String,Box<E>), CompoundSet(String,Tok,Box<E>), Call(Box<E>,Vec<E>) }
+enum E { N(f64), S(String), B(bool), Null, U, Var(String), Typeof(Box<E>), Update(String,i8,bool), Array(Vec<E>), Object(Vec<(String,E)>), Index(Box<E>,Box<E>), Property(Box<E>,String), SetIndex(Box<E>,Box<E>,Box<E>), SetProperty(Box<E>,String,Box<E>), Unary(Tok,Box<E>), Bin(Box<E>,Tok,Box<E>), Conditional(Box<E>,Box<E>,Box<E>), Arrow(String,Box<E>), Set(String,Box<E>), CompoundSet(String,Tok,Box<E>), Call(Box<E>,Vec<E>) }
 #[derive(Clone)]
 enum S { Expr(E), Decl(String,E), Block(Vec<S>), If(E,Box<S>,Option<Box<S>>), Switch(E,Vec<(Option<E>,Vec<S>)>), While(E,Box<S>), DoWhile(Box<S>,E), For(Option<Box<S>>,Option<E>,Option<E>,Box<S>), Break, Continue, Func(String,Vec<String>,Vec<S>), Ret(Option<E>) }
 struct Parser { t:Vec<Tok>, i:usize }
@@ -47,6 +47,7 @@ impl Parser {
  fn prec(t:&Tok)->u8{match t{Tok::Eq|Tok::PlusEq|Tok::MinusEq|Tok::MulEq|Tok::DivEq|Tok::ModEq=>1,Tok::Or=>2,Tok::And=>3,Tok::EqEq|Tok::Ne|Tok::StrictEq|Tok::StrictNe=>4,Tok::Lt|Tok::Gt|Tok::Le|Tok::Ge=>5,Tok::Plus|Tok::Minus=>6,Tok::Mul|Tok::Div|Tok::Mod=>7,_=>0}}
  fn expr(&mut self,min:u8)->Result<E,String>{let mut a=match self.take(){Tok::Num(n)=>E::N(n),Tok::Str(s)=>E::S(s),Tok::True=>E::B(true),Tok::False=>E::B(false),Tok::Null=>E::Null,Tok::Undef=>E::U,Tok::Id(n)=>E::Var(n),Tok::Ls=>{let mut a=vec![];if *self.peek()!=Tok::Rs{loop{a.push(self.expr(0)?);if !self.eat(Tok::Comma){break;}}}self.need(Tok::Rs)?;E::Array(a)},Tok::Lb=>{let mut props=vec![];if *self.peek()!=Tok::Rb{loop{let key=match self.take(){Tok::Id(k)|Tok::Str(k)=>k,x=>return Err(format!("Expected object key, got {:?}",x))};self.need(Tok::Colon)?;let value=self.expr(0)?;props.push((key,value));if !self.eat(Tok::Comma){break;}}}self.need(Tok::Rb)?;E::Object(props)},Tok::Minus|Tok::Bang|Tok::Typeof|Tok::Inc|Tok::Dec=>{let op=self.t[self.i-1].clone();match op{Tok::Typeof=>E::Typeof(Box::new(self.expr(7)?)),Tok::Inc|Tok::Dec=>{let name=match self.expr(7)?{E::Var(n)=>n,_=>return Err("Increment target must be a variable".into())};E::Update(name,if op==Tok::Inc{1}else{-1},true)},_=>E::Unary(op,Box::new(self.expr(7)?))}},Tok::Lp=>{let x=self.expr(0)?;self.need(Tok::Rp)?;x},x=>return Err(format!("Unexpected expression token: {:?}",x))};
   loop{if (*self.peek()==Tok::Inc||*self.peek()==Tok::Dec)&&min<=8{let op=self.take();let name=match a{E::Var(n)=>n,_=>return Err("Increment target must be a variable".into())};a=E::Update(name,if op==Tok::Inc{1}else{-1},false);continue;}
+  if *self.peek()==Tok::Arrow && min<=1{let name=match a{E::Var(n)=>n,_=>return Err("Arrow function parameter must be an identifier".into())};self.take();let body=self.expr(1)?;a=E::Arrow(name,Box::new(body));continue;}
   if *self.peek()==Tok::Lp{if min>7{break;}self.take();let mut args=vec![];if *self.peek()!=Tok::Rp{loop{args.push(self.expr(0)?);if !self.eat(Tok::Comma){break;}}}self.need(Tok::Rp)?;a=E::Call(Box::new(a),args);continue;}
    if *self.peek()==Tok::Ls {if min>8{break;}self.take();let idx=self.expr(0)?;self.need(Tok::Rs)?;a=E::Index(Box::new(a),Box::new(idx));continue;}
    if *self.peek()==Tok::Dot {if min>8{break;}self.take();let name=match self.take(){Tok::Id(n)=>n,x=>return Err(format!("Expected property name, got {:?}",x))};a=E::Property(Box::new(a),name);continue;}
@@ -108,6 +109,7 @@ impl Engine{
   E::Unary(op,x)=>{let v=Self::expr(x,e)?;match op{Tok::Minus=>Ok(V::N(-v.num()?)),Tok::Bang=>Ok(V::B(!v.truth())),_=>unreachable!()}},
   E::Call(f,args)=>{let f=Self::expr(f,e.clone())?;let a=args.iter().map(|x|Self::expr(x,e.clone())).collect::<Result<Vec<_>,_>>()?;match f{V::Fn(fun)=>{let local=Self::child(fun.env.clone());for(i,p)in fun.p.iter().enumerate(){Self::define(&local,p.clone(),a.get(i).cloned().unwrap_or(V::U));}match Self::run(&fun.b,local)?{Flow::Val(_)=>Ok(V::U),Flow::Ret(v)=>Ok(v)}},V::Native(native)=>match native.kind{NativeKind::Push=>{let mut arr=native.array.borrow_mut();for v in a{arr.push(v);}Ok(V::N(arr.len() as f64))},NativeKind::Pop=>Ok(native.array.borrow_mut().pop().unwrap_or(V::U))},_=>Err("TypeError: value is not callable".into())}},
   E::Conditional(c,y,n)=>if Self::expr(c,e.clone())?.truth(){Self::expr(y,e)}else{Self::expr(n,e)},
+  E::Arrow(param,body)=>Ok(V::Fn(Rc::new(Fun{p:vec![param.clone()],b:vec![S::Ret(Some((**body).clone()))],env:e}))),
   E::Bin(a,op,b)=>{
    let l=Self::expr(a,e.clone())?;
    if *op==Tok::And && !l.truth(){return Ok(l);}
@@ -150,5 +152,8 @@ impl Engine{
 
 #[test]fn switch_cases_and_default(){assert_eq!(Engine::new().eval("let x=2;let y=0;switch(x){case 1:y=10;break;case 2:y=20;break;default:y=30;}y").unwrap(),"20");assert_eq!(Engine::new().eval("let x=9;let y=0;switch(x){case 1:y=10;break;default:y=30;}y").unwrap(),"30");}
 #[test]fn switch_fallthrough(){assert_eq!(Engine::new().eval("let x=1;let y=0;switch(x){case 1:y+=1;case 2:y+=2;break;default:y=99;}y").unwrap(),"3");}
+
+#[test]fn arrow_function_single_parameter(){assert_eq!(Engine::new().eval("let double=x=>x*2;double(9)").unwrap(),"18");}
+#[test]fn arrow_function_closure(){assert_eq!(Engine::new().eval("let base=5;let add=x=>x+base;add(7)").unwrap(),"12");}
 
 }
