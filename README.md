@@ -12,6 +12,8 @@ Superwing is an independent Jד-engine project written in Rust under `JS/`.
 - `typeof` and prefix/postfix increment/decrement for simple variables.
 - Logical `&&` / `||` with short-circuit evaluation, plus strict equality `===` / `!==`.
 - `break` and `continue` in `while` and `for` loops.
+- `do...while`, the conditional (ternary) operator, and numeric remainder (`%`).
+- Compound assignment operators: `+=`, `-=`, `*=`, `/=`, and `%=` for variables.
 
 Run tests:
 
