@@ -1,7 +1,7 @@
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
 #[derive(Clone, Debug, PartialEq)]
-enum Tok { Num(f64), Str(String), Id(String), Let, Fn, Return, If, Else, Switch, Case, Default, While, Do, For, Break, Continue, Typeof, True, False, Null, Undef, Plus, Minus, Mul, Div, Mod, Eq, PlusEq, MinusEq, MulEq, DivEq, ModEq, Question, Arrow, EqEq, Ne, StrictEq, StrictNe, And, Or, Lt, Gt, Le, Ge, Bang, Inc, Dec, Lp, Rp, Lb, Rb, Ls, Rs, Dot, Colon, Semi, Comma, Eof }
+enum Tok { Num(f64), Str(String), Id(String), Let, Fn, Return, If, Else, Switch, Case, Default, While, Do, For, Break, Continue, Typeof, True, False, Null, Undef, Plus, Minus, Mul, Div, Mod, Eq, PlusEq, MinusEq, MulEq, DivEq, ModEq, Question, Nullish, Arrow, EqEq, Ne, StrictEq, StrictNe, And, Or, Lt, Gt, Le, Ge, Bang, Inc, Dec, Lp, Rp, Lb, Rb, Ls, Rs, Dot, Colon, Semi, Comma, Eof }
 
 fn lex(s: &str) -> Result<Vec<Tok>, String> {
     let c: Vec<char> = s.chars().collect(); let mut i=0; let mut out=vec![];
@@ -14,7 +14,7 @@ fn lex(s: &str) -> Result<Vec<Tok>, String> {
         let three=if i+2<c.len(){format!("{}{}{}",c[i],c[i+1],c[i+2])}else{String::new()};
         if three=="==="{out.push(Tok::StrictEq);i+=3;continue;} if three=="!=="{out.push(Tok::StrictNe);i+=3;continue;}
         let two=if i+1<c.len(){format!("{}{}",c[i],c[i+1])}else{String::new()};
-        if two=="=>" {out.push(Tok::Arrow);i+=2;continue;} if two=="+=" {out.push(Tok::PlusEq);i+=2;continue;} if two=="-=" {out.push(Tok::MinusEq);i+=2;continue;} if two=="*=" {out.push(Tok::MulEq);i+=2;continue;} if two=="/=" {out.push(Tok::DivEq);i+=2;continue;} if two=="%=" {out.push(Tok::ModEq);i+=2;continue;} if two=="&&"{out.push(Tok::And);i+=2;continue;} if two=="||"{out.push(Tok::Or);i+=2;continue;}
+        if two=="=>" {out.push(Tok::Arrow);i+=2;continue;} if two=="??" {out.push(Tok::Nullish);i+=2;continue;} if two=="+=" {out.push(Tok::PlusEq);i+=2;continue;} if two=="-=" {out.push(Tok::MinusEq);i+=2;continue;} if two=="*=" {out.push(Tok::MulEq);i+=2;continue;} if two=="/=" {out.push(Tok::DivEq);i+=2;continue;} if two=="%=" {out.push(Tok::ModEq);i+=2;continue;} if two=="&&"{out.push(Tok::And);i+=2;continue;} if two=="||"{out.push(Tok::Or);i+=2;continue;}
         if two=="==" {out.push(Tok::EqEq);i+=2;continue;} if two=="!=" {out.push(Tok::Ne);i+=2;continue;} if two=="<=" {out.push(Tok::Le);i+=2;continue;} if two==">=" {out.push(Tok::Ge);i+=2;continue;} if two=="++" {out.push(Tok::Inc);i+=2;continue;} if two=="--" {out.push(Tok::Dec);i+=2;continue;}
         out.push(match c[i]{'+'=>Tok::Plus,'-'=>Tok::Minus,'*'=>Tok::Mul,'/'=>Tok::Div,'%'=>Tok::Mod,'?'=>Tok::Question,'='=>Tok::Eq,'<'=>Tok::Lt,'>'=>Tok::Gt,'!'=>Tok::Bang,'('=>Tok::Lp,')'=>Tok::Rp,'{'=>Tok::Lb,'}'=>Tok::Rb,'['=>Tok::Ls,']'=>Tok::Rs,';'=>Tok::Semi,','=>Tok::Comma,'.'=>Tok::Dot,':'=>Tok::Colon,x=>return Err(format!("Unexpected character: {x}"))});i+=1;
     } out.push(Tok::Eof); Ok(out)
@@ -44,7 +44,7 @@ impl Parser {
   Tok::Return=>{self.take();let e=if *self.peek()==Tok::Semi||*self.peek()==Tok::Rb||*self.peek()==Tok::Eof{None}else{Some(self.expr(0)?)};self.eat(Tok::Semi);Ok(S::Ret(e))},
   _=>{let e=self.expr(0)?;self.eat(Tok::Semi);Ok(S::Expr(e))}
  }}
- fn prec(t:&Tok)->u8{match t{Tok::Eq|Tok::PlusEq|Tok::MinusEq|Tok::MulEq|Tok::DivEq|Tok::ModEq=>1,Tok::Or=>2,Tok::And=>3,Tok::EqEq|Tok::Ne|Tok::StrictEq|Tok::StrictNe=>4,Tok::Lt|Tok::Gt|Tok::Le|Tok::Ge=>5,Tok::Plus|Tok::Minus=>6,Tok::Mul|Tok::Div|Tok::Mod=>7,_=>0}}
+ fn prec(t:&Tok)->u8{match t{Tok::Eq|Tok::PlusEq|Tok::MinusEq|Tok::MulEq|Tok::DivEq|Tok::ModEq=>1,Tok::Or|Tok::Nullish=>2,Tok::And=>3,Tok::EqEq|Tok::Ne|Tok::StrictEq|Tok::StrictNe=>4,Tok::Lt|Tok::Gt|Tok::Le|Tok::Ge=>5,Tok::Plus|Tok::Minus=>6,Tok::Mul|Tok::Div|Tok::Mod=>7,_=>0}}
  fn expr(&mut self,min:u8)->Result<E,String>{let mut a=match self.take(){Tok::Num(n)=>E::N(n),Tok::Str(s)=>E::S(s),Tok::True=>E::B(true),Tok::False=>E::B(false),Tok::Null=>E::Null,Tok::Undef=>E::U,Tok::Id(n)=>E::Var(n),Tok::Ls=>{let mut a=vec![];if *self.peek()!=Tok::Rs{loop{a.push(self.expr(0)?);if !self.eat(Tok::Comma){break;}}}self.need(Tok::Rs)?;E::Array(a)},Tok::Lb=>{let mut props=vec![];if *self.peek()!=Tok::Rb{loop{let key=match self.take(){Tok::Id(k)|Tok::Str(k)=>k,x=>return Err(format!("Expected object key, got {:?}",x))};self.need(Tok::Colon)?;let value=self.expr(0)?;props.push((key,value));if !self.eat(Tok::Comma){break;}}}self.need(Tok::Rb)?;E::Object(props)},Tok::Minus|Tok::Bang|Tok::Typeof|Tok::Inc|Tok::Dec=>{let op=self.t[self.i-1].clone();match op{Tok::Typeof=>E::Typeof(Box::new(self.expr(7)?)),Tok::Inc|Tok::Dec=>{let name=match self.expr(7)?{E::Var(n)=>n,_=>return Err("Increment target must be a variable".into())};E::Update(name,if op==Tok::Inc{1}else{-1},true)},_=>E::Unary(op,Box::new(self.expr(7)?))}},Tok::Lp=>{let save=self.i;let mut params=vec![];let mut valid=true;if *self.peek()!=Tok::Rp{loop{match self.take(){Tok::Id(n)=>params.push(n),_=>{valid=false;break;}}if !self.eat(Tok::Comma){break;}}}if valid&&self.eat(Tok::Rp)&&self.eat(Tok::Arrow){let body=if *self.peek()==Tok::Lb{match self.stmt()?{S::Block(b)=>b,x=>vec![x]}}else{vec![S::Ret(Some(self.expr(1)?))]};E::Arrow(params,body)}else{self.i=save;let x=self.expr(0)?;self.need(Tok::Rp)?;x}},x=>return Err(format!("Unexpected expression token: {:?}",x))};
   loop{if (*self.peek()==Tok::Inc||*self.peek()==Tok::Dec)&&min<=8{let op=self.take();let name=match a{E::Var(n)=>n,_=>return Err("Increment target must be a variable".into())};a=E::Update(name,if op==Tok::Inc{1}else{-1},false);continue;}
   if *self.peek()==Tok::Arrow && min<=1{let name=match a{E::Var(n)=>n,_=>return Err("Arrow function parameter must be an identifier".into())};self.take();let body=if *self.peek()==Tok::Lb{match self.stmt()?{S::Block(b)=>b,x=>vec![x]}}else{vec![S::Ret(Some(self.expr(1)?))]};a=E::Arrow(vec![name],body);continue;}
@@ -114,9 +114,10 @@ impl Engine{
    let l=Self::expr(a,e.clone())?;
    if *op==Tok::And && !l.truth(){return Ok(l);}
    if *op==Tok::Or && l.truth(){return Ok(l);}
+   if *op==Tok::Nullish && !matches!(l,V::Null|V::U){return Ok(l);}
    let r=Self::expr(b,e)?;
    match op{
-   Tok::And=>Ok(r),Tok::Or=>Ok(r),
+   Tok::And=>Ok(r),Tok::Or|Tok::Nullish=>Ok(r),
    Tok::StrictEq=>Ok(V::B(Self::strict_eq(&l,&r))),Tok::StrictNe=>Ok(V::B(!Self::strict_eq(&l,&r))),
    Tok::Plus if matches!(&l,V::S(_))||matches!(&r,V::S(_))=>Ok(V::S(format!("{}{}",l.show(),r.show()))),
    Tok::Plus=>Ok(V::N(l.num()?+r.num()?)),Tok::Minus=>Ok(V::N(l.num()?-r.num()?)),Tok::Mul=>Ok(V::N(l.num()?*r.num()?)),Tok::Div=>Ok(V::N(l.num()?/r.num()?)),Tok::Mod=>Ok(V::N(l.num()?%r.num()?)),
@@ -159,6 +160,7 @@ impl Engine{
 #[test]fn arrow_zero_parameters(){assert_eq!(Engine::new().eval("let get=()=>42;get()").unwrap(),"42");}
 #[test]fn arrow_multiple_parameters(){assert_eq!(Engine::new().eval("let sum=(a,b,c)=>a+b+c;sum(2,3,4)").unwrap(),"9");}
 #[test]fn arrow_block_body(){assert_eq!(Engine::new().eval("let sum=(a,b)=>{let x=a+b;return x*2;};sum(3,4)").unwrap(),"14");}
+#[test]fn nullish_coalescing(){assert_eq!(Engine::new().eval("null ?? 'fallback'").unwrap(),"fallback");assert_eq!(Engine::new().eval("undefined ?? 7").unwrap(),"7");assert_eq!(Engine::new().eval("0 ?? 7").unwrap(),"0");assert_eq!(Engine::new().eval("false ?? true").unwrap(),"false");}
 #[test]fn arrow_block_without_return(){assert_eq!(Engine::new().eval("let f=()=>{let x=8;};f()").unwrap(),"undefined");}
 
 }
