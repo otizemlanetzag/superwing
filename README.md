@@ -1,10 +1,15 @@
 # Superwing
 
-Superwing is an independent browser-engine project. The JavaScript engine is written in Rust under `JS/`.
+Superwing is an independent browser-engine project. Its JavaScript interpreter is written in Rust under `JS/`.
 
-## JavaScript engine
+## Current interpreter features
 
-The current interpreter foundation includes tokenization, parsing, values, nested environments, variables, arithmetic, comparisons, conditionals, loops, function declarations and calls, arrays, indexed array access and assignment, object literals, object property access and assignment, and basic array `push()` / `pop()` methods.
+- Variables, nested scopes, arithmetic, comparisons, strings, booleans, and nullish values.
+- Conditional statements, `while` and `for` loops.
+- Named functions, parameters, and return values.
+- Array and object literals, indexed access, property access, and property assignment.
+- Array `push()` / `pop()`, and `length` for arrays and strings.
+- `typeof` and prefix/postfix increment/decrement for simple variables.
 
 Run tests:
 
@@ -14,4 +19,4 @@ Run a script:
 
     cargo run --manifest-path JS/Cargo.toml -- example.js
 
-This is still an early interpreter, not a complete ECMAScript implementation. Important missing features include standards-compliant coercion and equality, lexical declaration semantics (`const` / `let` / `var`), prototypes, constructors, classes, exceptions, modules, promises, async/await, and browser APIs.
+This is an experimental interpreter, not a complete or standards-compliant ECMAScript implementation. Major missing areas include correct lexical declaration semantics, prototypes, constructors, classes, exceptions, modules, closures with full JavaScript semantics, promises, async/await, and browser APIs.
