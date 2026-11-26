@@ -1,6 +1,6 @@
 # Superwing
 
-Superwing is an independent browser-engine project. The JavaScript engine is written in Rust under JS/.
+Superwing is an independent JS-engine project. The JavaScript engine is written in Rust under JS/.
 
 ## JavaScript engine
 
