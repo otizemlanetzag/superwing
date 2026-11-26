@@ -4,8 +4,8 @@ Run the Rust engine tests with:
 
     cargo test --manifest-path JS/Cargo.toml
 
-Run a JavaScript file with:
+Run a script with:
 
     cargo run --manifest-path JS/Cargo.toml -- path/to/program.js
 
-The unit tests cover arithmetic, variables, conditionals, loops, functions, strings, array literals and indexing, array mutation, array length, object literals, object property access and assignment, and basic array methods.
+The unit tests cover arithmetic, variables, branches, while/for loops, functions, strings, arrays, objects, property access and mutation, array methods, typeof, and increment/decrement operators.
