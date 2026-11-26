@@ -122,7 +122,7 @@ impl Engine{
    Tok::Plus if matches!(&l,V::S(_))||matches!(&r,V::S(_))=>Ok(V::S(format!("{}{}",l.show(),r.show()))),
    Tok::Plus=>Ok(V::N(l.num()?+r.num()?)),Tok::Minus=>Ok(V::N(l.num()?-r.num()?)),Tok::Mul=>Ok(V::N(l.num()?*r.num()?)),Tok::Div=>Ok(V::N(l.num()?/r.num()?)),Tok::Mod=>Ok(V::N(l.num()?%r.num()?)),Tok::Pow=>Ok(V::N(l.num()?.powf(r.num()?))),
    Tok::EqEq=>Ok(V::B(l.show()==r.show())),Tok::Ne=>Ok(V::B(l.show()!=r.show())),
-   Tok::Lt=>Ok(V::B(l.num()?<r.num()?)),Tok::Gt=>Ok(V::B(l.num()?>r.num()?)),Tok::Le=>Ok(V::B(l.num()?<=r.num()?)),Tok::Ge=>Ok(V::B(l.num()?>=r.num()?)),_=>Err("Unsupported operator".into())
+   Tok::Lt=>Ok(V::B(match (&l,&r){(V::S(a),V::S(b))=>a<b,_=>l.num()?<r.num()?})),Tok::Gt=>Ok(V::B(match (&l,&r){(V::S(a),V::S(b))=>a>b,_=>l.num()?>r.num()?})),Tok::Le=>Ok(V::B(match (&l,&r){(V::S(a),V::S(b))=>a<=b,_=>l.num()?<=r.num()?})),Tok::Ge=>Ok(V::B(match (&l,&r){(V::S(a),V::S(b))=>a>=b,_=>l.num()?>=r.num()?})),_=>Err("Unsupported operator".into())
   }}
  }}
 }
@@ -160,6 +160,7 @@ impl Engine{
 #[test]fn arrow_zero_parameters(){assert_eq!(Engine::new().eval("let get=()=>42;get()").unwrap(),"42");}
 #[test]fn arrow_multiple_parameters(){assert_eq!(Engine::new().eval("let sum=(a,b,c)=>a+b+c;sum(2,3,4)").unwrap(),"9");}
 #[test]fn arrow_block_body(){assert_eq!(Engine::new().eval("let sum=(a,b)=>{let x=a+b;return x*2;};sum(3,4)").unwrap(),"14");}
+#[test]fn string_relational_comparisons(){assert_eq!(Engine::new().eval("'apple' < 'banana'").unwrap(),"true");assert_eq!(Engine::new().eval("'z' > 'a'").unwrap(),"true");assert_eq!(Engine::new().eval("'10' < '2'").unwrap(),"true");}
 #[test]fn exponentiation(){assert_eq!(Engine::new().eval("2 ** 3").unwrap(),"8");assert_eq!(Engine::new().eval("2 ** 3 ** 2").unwrap(),"512");assert_eq!(Engine::new().eval("(2 ** 3) ** 2").unwrap(),"64");}
 #[test]fn nullish_coalescing(){assert_eq!(Engine::new().eval("null ?? 'fallback'").unwrap(),"fallback");assert_eq!(Engine::new().eval("undefined ?? 7").unwrap(),"7");assert_eq!(Engine::new().eval("0 ?? 7").unwrap(),"0");assert_eq!(Engine::new().eval("false ?? true").unwrap(),"false");}
 #[test]fn arrow_block_without_return(){assert_eq!(Engine::new().eval("let f=()=>{let x=8;};f()").unwrap(),"undefined");}
