@@ -1,19 +1,17 @@
 # Superwing
 
-Superwing is an independent browser-engine project. Its experimental JavaScript interpreter is written in Rust under `JS/`.
+Superwing is an independent JS-engine project written in Rust under `JS/`.
 
 ## Current interpreter features
 
-- Numbers, strings, booleans, `null`, and `undefined`.
-- Variables, nested scopes, and named functions with parameters and return values.
-- Arithmetic: `+`, `-`, `*`, `/`, and `%`.
-- Comparisons, strict equality (`===` / `!==`), and logical short-circuit operators (`&&` / `||`).
-- Compound assignment: `+=`, `-=`, `*=`, `/=`, and `%=` for variables.
-- Conditional statements, the ternary operator, `while`, `do...while`, and `for` loops.
-- `break` and `continue` in loops.
+- Variables, nested scopes, arithmetic, comparisons, strings, booleans, and nullish values.
+- Conditional statements, `while` and `for` loops.
+- Named functions, parameters, and return values.
 - Array and object literals, indexed access, property access, and property assignment.
 - Array `push()` / `pop()`, and `length` for arrays and strings.
 - `typeof` and prefix/postfix increment/decrement for simple variables.
+- Logical `&&` / `||` with short-circuit evaluation, plus strict equality `===` / `!==`.
+- `break` and `continue` in `while` and `for` loops.
 
 Run tests:
 
