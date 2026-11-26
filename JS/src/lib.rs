@@ -1,7 +1,7 @@
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
 #[derive(Clone, Debug, PartialEq)]
-enum Tok { Num(f64), Str(String), Id(String), Let, Fn, Return, If, Else, While, True, False, Null, Undef, Plus, Minus, Mul, Div, Eq, EqEq, Ne, Lt, Gt, Le, Ge, Bang, Lp, Rp, Lb, Rb, Semi, Comma, Eof }
+enum Tok { Num(f64), Str(String), Id(String), Let, Fn, Return, If, Else, While, True, False, Null, Undef, Plus, Minus, Mul, Div, Eq, EqEq, Ne, Lt, Gt, Le, Ge, Bang, Lp, Rp, Lb, Rb, Ls, Rs, Semi, Comma, Dot, Eof }
 
 fn lex(s: &str) -> Result<Vec<Tok>, String> {
     let c: Vec<char> = s.chars().collect(); let mut i=0; let mut out=vec![];
@@ -13,12 +13,12 @@ fn lex(s: &str) -> Result<Vec<Tok>, String> {
         if c[i].is_ascii_alphabetic()||c[i]=='_'||c[i]=='$' {let st=i;i+=1;while i<c.len()&&(c[i].is_ascii_alphanumeric()||c[i]=='_'||c[i]=='$'){i+=1;} let w:String=c[st..i].iter().collect(); out.push(match w.as_str(){"let"|"const"|"var"=>Tok::Let,"function"=>Tok::Fn,"return"=>Tok::Return,"if"=>Tok::If,"else"=>Tok::Else,"while"=>Tok::While,"true"=>Tok::True,"false"=>Tok::False,"null"=>Tok::Null,"undefined"=>Tok::Undef,_=>Tok::Id(w)});continue;}
         let two=if i+1<c.len(){format!("{}{}",c[i],c[i+1])}else{String::new()};
         if two=="==" {out.push(Tok::EqEq);i+=2;continue;} if two=="!=" {out.push(Tok::Ne);i+=2;continue;} if two=="<=" {out.push(Tok::Le);i+=2;continue;} if two==">=" {out.push(Tok::Ge);i+=2;continue;}
-        out.push(match c[i]{'+'=>Tok::Plus,'-'=>Tok::Minus,'*'=>Tok::Mul,'/'=>Tok::Div,'='=>Tok::Eq,'<'=>Tok::Lt,'>'=>Tok::Gt,'!'=>Tok::Bang,'('=>Tok::Lp,')'=>Tok::Rp,'{'=>Tok::Lb,'}'=>Tok::Rb,';'=>Tok::Semi,','=>Tok::Comma,x=>return Err(format!("Unexpected character: {x}"))});i+=1;
+        out.push(match c[i]{'+'=>Tok::Plus,'-'=>Tok::Minus,'*'=>Tok::Mul,'/'=>Tok::Div,'='=>Tok::Eq,'<'=>Tok::Lt,'>'=>Tok::Gt,'!'=>Tok::Bang,'('=>Tok::Lp,')'=>Tok::Rp,'{'=>Tok::Lb,'}'=>Tok::Rb,'['=>Tok::Ls,']'=>Tok::Rs,';'=>Tok::Semi,','=>Tok::Comma,'.'=>Tok::Dot,x=>return Err(format!("Unexpected character: {x}"))});i+=1;
     } out.push(Tok::Eof); Ok(out)
 }
 
 #[derive(Clone)]
-enum E { N(f64), S(String), B(bool), Null, U, Var(String), Unary(Tok,Box<E>), Bin(Box<E>,Tok,Box<E>), Set(String,Box<E>), Call(Box<E>,Vec<E>) }
+enum E { N(f64), S(String), B(bool), Null, U, Var(String), Array(Vec<E>), Index(Box<E>,Box<E>), SetIndex(Box<E>,Box<E>,Box<E>), Unary(Tok,Box<E>), Bin(Box<E>,Tok,Box<E>), Set(String,Box<E>), Call(Box<E>,Vec<E>) }
 #[derive(Clone)]
 enum S { Expr(E), Decl(String,E), Block(Vec<S>), If(E,Box<S>,Option<Box<S>>), While(E,Box<S>), Func(String,Vec<String>,Vec<S>), Ret(Option<E>) }
 struct Parser { t:Vec<Tok>, i:usize }
@@ -37,16 +37,17 @@ impl Parser {
   _=>{let e=self.expr(0)?;self.eat(Tok::Semi);Ok(S::Expr(e))}
  }}
  fn prec(t:&Tok)->u8{match t{Tok::Eq=>1,Tok::EqEq|Tok::Ne=>3,Tok::Lt|Tok::Gt|Tok::Le|Tok::Ge=>4,Tok::Plus|Tok::Minus=>5,Tok::Mul|Tok::Div=>6,_=>0}}
- fn expr(&mut self,min:u8)->Result<E,String>{let mut a=match self.take(){Tok::Num(n)=>E::N(n),Tok::Str(s)=>E::S(s),Tok::True=>E::B(true),Tok::False=>E::B(false),Tok::Null=>E::Null,Tok::Undef=>E::U,Tok::Id(n)=>E::Var(n),Tok::Minus|Tok::Bang=>{let op=self.t[self.i-1].clone();E::Unary(op,Box::new(self.expr(7)?))},Tok::Lp=>{let x=self.expr(0)?;self.need(Tok::Rp)?;x},x=>return Err(format!("Unexpected expression token: {:?}",x))};
+ fn expr(&mut self,min:u8)->Result<E,String>{let mut a=match self.take(){Tok::Num(n)=>E::N(n),Tok::Str(s)=>E::S(s),Tok::True=>E::B(true),Tok::False=>E::B(false),Tok::Null=>E::Null,Tok::Undef=>E::U,Tok::Id(n)=>E::Var(n),Tok::Ls=>{let mut a=vec![];if *self.peek()!=Tok::Rs{loop{a.push(self.expr(0)?);if !self.eat(Tok::Comma){break;}}}self.need(Tok::Rs)?;E::Array(a)},Tok::Minus|Tok::Bang=>{let op=self.t[self.i-1].clone();E::Unary(op,Box::new(self.expr(7)?))},Tok::Lp=>{let x=self.expr(0)?;self.need(Tok::Rp)?;x},x=>return Err(format!("Unexpected expression token: {:?}",x))};
   loop{if *self.peek()==Tok::Lp{if min>7{break;}self.take();let mut args=vec![];if *self.peek()!=Tok::Rp{loop{args.push(self.expr(0)?);if !self.eat(Tok::Comma){break;}}}self.need(Tok::Rp)?;a=E::Call(Box::new(a),args);continue;}
-   let p=Self::prec(self.peek());if p==0||p<min{break;}let op=self.take();let b=self.expr(if op==Tok::Eq{p}else{p+1})?;a=if op==Tok::Eq{if let E::Var(n)=a{E::Set(n,Box::new(b))}else{return Err("Invalid assignment target".into())}}else{E::Bin(Box::new(a),op,Box::new(b))};}Ok(a)
+   if *self.peek()==Tok::Ls {if min>8{break;}self.take();let idx=self.expr(0)?;self.need(Tok::Rs)?;a=E::Index(Box::new(a),Box::new(idx));continue;}
+   let p=Self::prec(self.peek());if p==0||p<min{break;}let op=self.take();let b=self.expr(if op==Tok::Eq{p}else{p+1})?;a=if op==Tok::Eq{match a{E::Var(n)=>E::Set(n,Box::new(b)),E::Index(obj,idx)=>E::SetIndex(obj,idx,Box::new(b)),_=>return Err("Invalid assignment target".into())}}else{E::Bin(Box::new(a),op,Box::new(b))};}Ok(a)
  }
 }
 type Env=Rc<RefCell<Scope>>;
 struct Scope{v:HashMap<String,V>,parent:Option<Env>}
 #[derive(Clone)] struct Fun{p:Vec<String>,b:Vec<S>,env:Env}
-#[derive(Clone)] enum V{N(f64),S(String),B(bool),Null,U,Fn(Rc<Fun>)}
-impl V{fn truth(&self)->bool{match self{V::B(x)=>*x,V::N(x)=>*x!=0.0,V::S(x)=>!x.is_empty(),V::Null|V::U=>false,V::Fn(_)=>true}}fn num(&self)->Result<f64,String>{match self{V::N(x)=>Ok(*x),V::B(x)=>Ok(if *x{1.0}else{0.0}),V::Null=>Ok(0.0),V::S(x)=>x.parse().map_err(|_|"Cannot convert string to number".into()),_=>Err("TypeError: expected a number".into())}}fn show(&self)->String{match self{V::N(x) if x.fract()==0.0=>format!("{}",*x as i64),V::N(x)=>x.to_string(),V::S(x)=>x.clone(),V::B(x)=>x.to_string(),V::Null=>"null".into(),V::U=>"undefined".into(),V::Fn(_)=>"[Function]".into()}}}
+#[derive(Clone)] enum V{N(f64),S(String),B(bool),Null,U,Array(Rc<RefCell<Vec<V>>>),Fn(Rc<Fun>)}
+impl V{fn truth(&self)->bool{match self{V::B(x)=>*x,V::N(x)=>*x!=0.0,V::S(x)=>!x.is_empty(),V::Null|V::U=>false,V::Array(_)|V::Fn(_)=>true}}fn num(&self)->Result<f64,String>{match self{V::N(x)=>Ok(*x),V::B(x)=>Ok(if *x{1.0}else{0.0}),V::Null=>Ok(0.0),V::S(x)=>x.parse().map_err(|_|"Cannot convert string to number".into()),_=>Err("TypeError: expected a number".into())}}fn show(&self)->String{match self{V::N(x) if x.fract()==0.0=>format!("{}",*x as i64),V::N(x)=>x.to_string(),V::S(x)=>x.clone(),V::B(x)=>x.to_string(),V::Null=>"null".into(),V::U=>"undefined".into(),V::Array(a)=>format!("[{}]",a.borrow().iter().map(|v|v.show()).collect::<Vec<_>>().join(", ")),V::Fn(_)=>"[Function]".into()}}}
 enum Flow{Val(V),Ret(V)}
 pub struct Engine{global:Env}
 impl Default for Engine{fn default()->Self{Self::new()}}
@@ -68,6 +69,9 @@ impl Engine{
  }}
  fn expr(x:&E,e:Env)->Result<V,String>{match x{
   E::N(n)=>Ok(V::N(*n)),E::S(s)=>Ok(V::S(s.clone())),E::B(b)=>Ok(V::B(*b)),E::Null=>Ok(V::Null),E::U=>Ok(V::U),E::Var(n)=>Self::get(&e,n),
+  E::Array(items)=>{let values=items.iter().map(|x|Self::expr(x,e.clone())).collect::<Result<Vec<_>,_>>()?;Ok(V::Array(Rc::new(RefCell::new(values))))},
+  E::Index(object,index)=>{let o=Self::expr(object,e.clone())?;let i=Self::expr(index,e)?;match o{V::Array(a)=>{let n=i.num()?;if n<0.0||n.fract()!=0.0{return Ok(V::U);}Ok(a.borrow().get(n as usize).cloned().unwrap_or(V::U))},V::S(text)=>{let n=i.num()?;if n<0.0||n.fract()!=0.0{return Ok(V::U);}Ok(text.chars().nth(n as usize).map(|c|V::S(c.to_string())).unwrap_or(V::U))},_=>Err("TypeError: value is not indexable".into())}},
+  E::SetIndex(object,index,value)=>{let o=Self::expr(object,e.clone())?;let i=Self::expr(index,e.clone())?;let v=Self::expr(value,e)?;match o{V::Array(a)=>{let n=i.num()?;if n<0.0||n.fract()!=0.0||n>1_000_000.0{return Err("RangeError: invalid array index".into());}let mut a=a.borrow_mut();let n=n as usize;if n>=a.len(){a.resize(n+1,V::U);}a[n]=v.clone();Ok(v)},_=>Err("TypeError: indexed value is not assignable".into())}},
   E::Set(n,x)=>{let v=Self::expr(x,e.clone())?;Self::set(&e,n,v)},
   E::Unary(op,x)=>{let v=Self::expr(x,e)?;match op{Tok::Minus=>Ok(V::N(-v.num()?)),Tok::Bang=>Ok(V::B(!v.truth())),_=>unreachable!()}},
   E::Call(f,args)=>{let f=Self::expr(f,e.clone())?;let a=args.iter().map(|x|Self::expr(x,e.clone())).collect::<Result<Vec<_>,_>>()?;if let V::Fn(fun)=f{let local=Self::child(fun.env.clone());for(i,p)in fun.p.iter().enumerate(){Self::define(&local,p.clone(),a.get(i).cloned().unwrap_or(V::U));}match Self::run(&fun.b,local)?{Flow::Val(_)=>Ok(V::U),Flow::Ret(v)=>Ok(v)}}else{Err("TypeError: value is not callable".into())}},
@@ -79,4 +83,8 @@ impl Engine{
   }}
  }}
 }
-#[cfg(test)]mod tests{use super::Engine;#[test]fn arithmetic(){assert_eq!(Engine::new().eval("1+2*3").unwrap(),"7");}#[test]fn variables(){assert_eq!(Engine::new().eval("let x=5; x=x+2; x").unwrap(),"7");}#[test]fn branch(){assert_eq!(Engine::new().eval("if(3>2){8}else{0}").unwrap(),"8");}#[test]fn loop_works(){assert_eq!(Engine::new().eval("let i=0;while(i<3){i=i+1;}i").unwrap(),"3");}#[test]fn functions(){assert_eq!(Engine::new().eval("function sum(a,b){return a+b;}sum(4,7)").unwrap(),"11");}#[test]fn strings(){assert_eq!(Engine::new().eval("'hi '+'there'").unwrap(),"hi there");}}
+#[cfg(test)]mod tests{use super::Engine;#[test]fn arithmetic(){assert_eq!(Engine::new().eval("1+2*3").unwrap(),"7");}#[test]fn variables(){assert_eq!(Engine::new().eval("let x=5; x=x+2; x").unwrap(),"7");}#[test]fn branch(){assert_eq!(Engine::new().eval("if(3>2){8}else{0}").unwrap(),"8");}#[test]fn loop_works(){assert_eq!(Engine::new().eval("let i=0;while(i<3){i=i+1;}i").unwrap(),"3");}#[test]fn functions(){assert_eq!(Engine::new().eval("function sum(a,b){return a+b;}sum(4,7)").unwrap(),"11");}#[test]fn strings(){assert_eq!(Engine::new().eval("'hi '+'there'").unwrap(),"hi there");}
+#[test]fn array_literal_and_index(){assert_eq!(Engine::new().eval("let a=[10,20,30];a[1]").unwrap(),"20");}
+#[test]fn array_assignment(){assert_eq!(Engine::new().eval("let a=[1,2];a[1]=9;a[1]").unwrap(),"9");}
+#[test]fn array_growth(){assert_eq!(Engine::new().eval("let a=[];a[2]=7;a[2]").unwrap(),"7");}
+}
