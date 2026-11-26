@@ -10,6 +10,7 @@ Superwing is an independent browser-engine project. Its JavaScript interpreter i
 - Array and object literals, indexed access, property access, and property assignment.
 - Array `push()` / `pop()`, and `length` for arrays and strings.
 - `typeof` and prefix/postfix increment/decrement for simple variables.
+- Logical `&&` / `||` with short-circuit evaluation, plus strict equality `===` / `!==`.
 
 Run tests:
 
