@@ -74,7 +74,7 @@ impl Engine{
   S::Block(b)=>Self::run(b,Self::child(e)),
   S::If(c,y,n)=>if Self::expr(c,e.clone())?.truth(){Self::stmt(y,e)}else if let Some(n)=n{Self::stmt(n,e)}else{Ok(Flow::Val(V::U))},
   S::While(c,b)=>{let mut last=V::U;let mut count=0;while Self::expr(c,e.clone())?.truth(){count+=1;if count>100000{return Err("RangeError: loop limit exceeded".into());}match Self::stmt(b,e.clone())?{Flow::Val(v)=>last=v,Flow::Break=>break,Flow::Continue=>continue,r@Flow::Ret(_)=>return Ok(r)}}Ok(Flow::Val(last))},
-  S::For(init,cond,update,b)=>{let local=Self::child(e);if let Some(i)=init{match Self::stmt(i,local.clone())?{Flow::Ret(v)=>return Ok(Flow::Ret(v)),Flow::Val(_)=>{}}}let mut last=V::U;let mut count=0;loop{if let Some(c)=cond{if !Self::expr(c,local.clone())?.truth(){break;}}count+=1;if count>100000{return Err("RangeError: loop limit exceeded".into());}match Self::stmt(b,local.clone())?{Flow::Ret(v)=>return Ok(Flow::Ret(v)),Flow::Break=>break,Flow::Continue=>{if let Some(u)=update{Self::expr(u,local.clone())?;}continue;},Flow::Val(v)=>last=v}if let Some(u)=update{Self::expr(u,local.clone())?;}}Ok(Flow::Val(last))},
+  S::For(init,cond,update,b)=>{let local=Self::child(e);if let Some(i)=init{match Self::stmt(i,local.clone())?{Flow::Ret(v)=>return Ok(Flow::Ret(v)),Flow::Break|Flow::Continue=>return Err("SyntaxError: loop control in for initializer".into()),Flow::Val(_)=>{}}}let mut last=V::U;let mut count=0;loop{if let Some(c)=cond{if !Self::expr(c,local.clone())?.truth(){break;}}count+=1;if count>100000{return Err("RangeError: loop limit exceeded".into());}match Self::stmt(b,local.clone())?{Flow::Ret(v)=>return Ok(Flow::Ret(v)),Flow::Break=>break,Flow::Continue=>{if let Some(u)=update{Self::expr(u,local.clone())?;}continue;},Flow::Val(v)=>last=v}if let Some(u)=update{Self::expr(u,local.clone())?;}}Ok(Flow::Val(last))},
   S::Func(n,p,b)=>{let f=V::Fn(Rc::new(Fun{p:p.clone(),b:b.clone(),env:e.clone()}));Self::define(&e,n.clone(),f.clone());Ok(Flow::Val(f))},
   S::Break=>Ok(Flow::Break),S::Continue=>Ok(Flow::Continue),
   S::Ret(x)=>Ok(Flow::Ret(if let Some(x)=x{Self::expr(x,e)?}else{V::U}))
@@ -134,5 +134,6 @@ impl Engine{
 #[test]fn for_loop(){assert_eq!(Engine::new().eval("let total=0;for(let i=0;i<4;i++){total=total+i;}total").unwrap(),"6");}
 #[test]fn logical_short_circuit(){assert_eq!(Engine::new().eval("let x=0;false && (x=1);true || (x=2);x").unwrap(),"0");}
 #[test]fn logical_values(){assert_eq!(Engine::new().eval("0 || 'fallback'").unwrap(),"fallback");assert_eq!(Engine::new().eval("'yes' && 9").unwrap(),"9");}
-#[test]fn strict_equality(){assert_eq!(Engine::new().eval("1 === 1").unwrap(),"true");assert_eq!(Engine::new().eval("1 === '1'").unwrap(),"false");assert_eq!(Engine::new().eval("1 !== '1'").unwrap(),"true");}
+#[test]fn break_while(){assert_eq!(Engine::new().eval("let i=0;while(true){i++;if(i==3){break;}}i").unwrap(),"3");}
+#[test]fn continue_for(){assert_eq!(Engine::new().eval("let n=0;for(let i=0;i<5;i++){if(i==2){continue;}n=n+1;}n").unwrap(),"4");}\n#[test]fn strict_equality(){assert_eq!(Engine::new().eval("1 === 1").unwrap(),"true");assert_eq!(Engine::new().eval("1 === '1'").unwrap(),"false");assert_eq!(Engine::new().eval("1 !== '1'").unwrap(),"true");}
 }
