@@ -18,7 +18,7 @@ fn lex(s: &str) -> Result<Vec<Tok>, String> {
 }
 
 #[derive(Clone)]
-enum E { N(f64), S(String), B(bool), Null, U, Var(String), Array(Vec<E>), Index(Box<E>,Box<E>), SetIndex(Box<E>,Box<E>,Box<E>), Unary(Tok,Box<E>), Bin(Box<E>,Tok,Box<E>), Set(String,Box<E>), Call(Box<E>,Vec<E>) }
+enum E { N(f64), S(String), B(bool), Null, U, Var(String), Array(Vec<E>), Index(Box<E>,Box<E>), Property(Box<E>,String), SetIndex(Box<E>,Box<E>,Box<E>), Unary(Tok,Box<E>), Bin(Box<E>,Tok,Box<E>), Set(String,Box<E>), Call(Box<E>,Vec<E>) }
 #[derive(Clone)]
 enum S { Expr(E), Decl(String,E), Block(Vec<S>), If(E,Box<S>,Option<Box<S>>), While(E,Box<S>), Func(String,Vec<String>,Vec<S>), Ret(Option<E>) }
 struct Parser { t:Vec<Tok>, i:usize }
@@ -40,6 +40,7 @@ impl Parser {
  fn expr(&mut self,min:u8)->Result<E,String>{let mut a=match self.take(){Tok::Num(n)=>E::N(n),Tok::Str(s)=>E::S(s),Tok::True=>E::B(true),Tok::False=>E::B(false),Tok::Null=>E::Null,Tok::Undef=>E::U,Tok::Id(n)=>E::Var(n),Tok::Ls=>{let mut a=vec![];if *self.peek()!=Tok::Rs{loop{a.push(self.expr(0)?);if !self.eat(Tok::Comma){break;}}}self.need(Tok::Rs)?;E::Array(a)},Tok::Minus|Tok::Bang=>{let op=self.t[self.i-1].clone();E::Unary(op,Box::new(self.expr(7)?))},Tok::Lp=>{let x=self.expr(0)?;self.need(Tok::Rp)?;x},x=>return Err(format!("Unexpected expression token: {:?}",x))};
   loop{if *self.peek()==Tok::Lp{if min>7{break;}self.take();let mut args=vec![];if *self.peek()!=Tok::Rp{loop{args.push(self.expr(0)?);if !self.eat(Tok::Comma){break;}}}self.need(Tok::Rp)?;a=E::Call(Box::new(a),args);continue;}
    if *self.peek()==Tok::Ls {if min>8{break;}self.take();let idx=self.expr(0)?;self.need(Tok::Rs)?;a=E::Index(Box::new(a),Box::new(idx));continue;}
+   if *self.peek()==Tok::Dot {if min>8{break;}self.take();let name=match self.take(){Tok::Id(n)=>n,x=>return Err(format!("Expected property name, got {:?}",x))};a=E::Property(Box::new(a),name);continue;}
    let p=Self::prec(self.peek());if p==0||p<min{break;}let op=self.take();let b=self.expr(if op==Tok::Eq{p}else{p+1})?;a=if op==Tok::Eq{match a{E::Var(n)=>E::Set(n,Box::new(b)),E::Index(obj,idx)=>E::SetIndex(obj,idx,Box::new(b)),_=>return Err("Invalid assignment target".into())}}else{E::Bin(Box::new(a),op,Box::new(b))};}Ok(a)
  }
 }
@@ -71,6 +72,7 @@ impl Engine{
   E::N(n)=>Ok(V::N(*n)),E::S(s)=>Ok(V::S(s.clone())),E::B(b)=>Ok(V::B(*b)),E::Null=>Ok(V::Null),E::U=>Ok(V::U),E::Var(n)=>Self::get(&e,n),
   E::Array(items)=>{let values=items.iter().map(|x|Self::expr(x,e.clone())).collect::<Result<Vec<_>,_>>()?;Ok(V::Array(Rc::new(RefCell::new(values))))},
   E::Index(object,index)=>{let o=Self::expr(object,e.clone())?;let i=Self::expr(index,e)?;match o{V::Array(a)=>{let n=i.num()?;if n<0.0||n.fract()!=0.0{return Ok(V::U);}Ok(a.borrow().get(n as usize).cloned().unwrap_or(V::U))},V::S(text)=>{let n=i.num()?;if n<0.0||n.fract()!=0.0{return Ok(V::U);}Ok(text.chars().nth(n as usize).map(|c|V::S(c.to_string())).unwrap_or(V::U))},_=>Err("TypeError: value is not indexable".into())}},
+  E::Property(object,name)=>{let o=Self::expr(object,e)?;match (o,name.as_str()){(V::Array(a),"length")=>Ok(V::N(a.borrow().len() as f64)),(V::S(s),"length")=>Ok(V::N(s.chars().count() as f64)),_=>Err(format!("TypeError: property '{}' is not supported",name))}},
   E::SetIndex(object,index,value)=>{let o=Self::expr(object,e.clone())?;let i=Self::expr(index,e.clone())?;let v=Self::expr(value,e)?;match o{V::Array(a)=>{let n=i.num()?;if n<0.0||n.fract()!=0.0||n>1_000_000.0{return Err("RangeError: invalid array index".into());}let mut a=a.borrow_mut();let n=n as usize;if n>=a.len(){a.resize(n+1,V::U);}a[n]=v.clone();Ok(v)},_=>Err("TypeError: indexed value is not assignable".into())}},
   E::Set(n,x)=>{let v=Self::expr(x,e.clone())?;Self::set(&e,n,v)},
   E::Unary(op,x)=>{let v=Self::expr(x,e)?;match op{Tok::Minus=>Ok(V::N(-v.num()?)),Tok::Bang=>Ok(V::B(!v.truth())),_=>unreachable!()}},
@@ -87,4 +89,6 @@ impl Engine{
 #[test]fn array_literal_and_index(){assert_eq!(Engine::new().eval("let a=[10,20,30];a[1]").unwrap(),"20");}
 #[test]fn array_assignment(){assert_eq!(Engine::new().eval("let a=[1,2];a[1]=9;a[1]").unwrap(),"9");}
 #[test]fn array_growth(){assert_eq!(Engine::new().eval("let a=[];a[2]=7;a[2]").unwrap(),"7");}
+#[test]fn array_length(){assert_eq!(Engine::new().eval("let a=[3,4,5];a.length").unwrap(),"3");}
+#[test]fn string_index_and_length(){assert_eq!(Engine::new().eval("'cat'[1]").unwrap(),"a");assert_eq!(Engine::new().eval("'cat'.length").unwrap(),"3");}
 }
