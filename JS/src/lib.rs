@@ -1,7 +1,7 @@
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
 #[derive(Clone, Debug, PartialEq)]
-enum Tok { Num(f64), Str(String), Id(String), Let, Fn, Return, If, Else, While, Do, For, Break, Continue, Typeof, True, False, Null, Undef, Plus, Minus, Mul, Div, Mod, Eq, PlusEq, MinusEq, MulEq, DivEq, ModEq, Question, EqEq, Ne, StrictEq, StrictNe, And, Or, Lt, Gt, Le, Ge, Bang, Inc, Dec, Lp, Rp, Lb, Rb, Ls, Rs, Dot, Colon, Semi, Comma, Eof }
+enum Tok { Num(f64), Str(String), Id(String), Let, Fn, Return, If, Else, Switch, Case, Default, While, Do, For, Break, Continue, Typeof, True, False, Null, Undef, Plus, Minus, Mul, Div, Mod, Eq, PlusEq, MinusEq, MulEq, DivEq, ModEq, Question, EqEq, Ne, StrictEq, StrictNe, And, Or, Lt, Gt, Le, Ge, Bang, Inc, Dec, Lp, Rp, Lb, Rb, Ls, Rs, Dot, Colon, Semi, Comma, Eof }
 
 fn lex(s: &str) -> Result<Vec<Tok>, String> {
     let c: Vec<char> = s.chars().collect(); let mut i=0; let mut out=vec![];
@@ -10,7 +10,7 @@ fn lex(s: &str) -> Result<Vec<Tok>, String> {
         if c[i]=='/' && c.get(i+1)==Some(&'/') { while i<c.len() && c[i]!='\n' {i+=1;} continue; }
         if c[i].is_ascii_digit() { let st=i; i+=1; while i<c.len() && (c[i].is_ascii_digit()||c[i]=='.') {i+=1;} out.push(Tok::Num(c[st..i].iter().collect::<String>().parse().map_err(|_|"Invalid number")?)); continue; }
         if c[i]=='"' || c[i]=='\'' { let q=c[i]; i+=1; let mut v=String::new(); while i<c.len() && c[i]!=q { if c[i]=='\\' && i+1<c.len() {i+=1; v.push(match c[i] {'n'=>'\n','t'=>'\t',x=>x});} else {v.push(c[i]);} i+=1; } if i==c.len(){return Err("Unterminated string".into());} i+=1; out.push(Tok::Str(v)); continue; }
-        if c[i].is_ascii_alphabetic()||c[i]=='_'||c[i]=='$' {let st=i;i+=1;while i<c.len()&&(c[i].is_ascii_alphanumeric()||c[i]=='_'||c[i]=='$'){i+=1;} let w:String=c[st..i].iter().collect(); out.push(match w.as_str(){"let"|"const"|"var"=>Tok::Let,"function"=>Tok::Fn,"return"=>Tok::Return,"if"=>Tok::If,"else"=>Tok::Else,"while"=>Tok::While,"do"=>Tok::Do,"for"=>Tok::For,"break"=>Tok::Break,"continue"=>Tok::Continue,"typeof"=>Tok::Typeof,"true"=>Tok::True,"false"=>Tok::False,"null"=>Tok::Null,"undefined"=>Tok::Undef,_=>Tok::Id(w)});continue;}
+        if c[i].is_ascii_alphabetic()||c[i]=='_'||c[i]=='$' {let st=i;i+=1;while i<c.len()&&(c[i].is_ascii_alphanumeric()||c[i]=='_'||c[i]=='$'){i+=1;} let w:String=c[st..i].iter().collect(); out.push(match w.as_str(){"let"|"const"|"var"=>Tok::Let,"function"=>Tok::Fn,"return"=>Tok::Return,"if"=>Tok::If,"else"=>Tok::Else,"switch"=>Tok::Switch,"case"=>Tok::Case,"default"=>Tok::Default,"while"=>Tok::While,"do"=>Tok::Do,"for"=>Tok::For,"break"=>Tok::Break,"continue"=>Tok::Continue,"typeof"=>Tok::Typeof,"true"=>Tok::True,"false"=>Tok::False,"null"=>Tok::Null,"undefined"=>Tok::Undef,_=>Tok::Id(w)});continue;}
         let three=if i+2<c.len(){format!("{}{}{}",c[i],c[i+1],c[i+2])}else{String::new()};
         if three=="==="{out.push(Tok::StrictEq);i+=3;continue;} if three=="!=="{out.push(Tok::StrictNe);i+=3;continue;}
         let two=if i+1<c.len(){format!("{}{}",c[i],c[i+1])}else{String::new()};
@@ -23,7 +23,7 @@ fn lex(s: &str) -> Result<Vec<Tok>, String> {
 #[derive(Clone)]
 enum E { N(f64), S(String), B(bool), Null, U, Var(String), Typeof(Box<E>), Update(String,i8,bool), Array(Vec<E>), Object(Vec<(String,E)>), Index(Box<E>,Box<E>), Property(Box<E>,String), SetIndex(Box<E>,Box<E>,Box<E>), SetProperty(Box<E>,String,Box<E>), Unary(Tok,Box<E>), Bin(Box<E>,Tok,Box<E>), Conditional(Box<E>,Box<E>,Box<E>), Set(String,Box<E>), CompoundSet(String,Tok,Box<E>), Call(Box<E>,Vec<E>) }
 #[derive(Clone)]
-enum S { Expr(E), Decl(String,E), Block(Vec<S>), If(E,Box<S>,Option<Box<S>>), While(E,Box<S>), DoWhile(Box<S>,E), For(Option<Box<S>>,Option<E>,Option<E>,Box<S>), Break, Continue, Func(String,Vec<String>,Vec<S>), Ret(Option<E>) }
+enum S { Expr(E), Decl(String,E), Block(Vec<S>), If(E,Box<S>,Option<Box<S>>), Switch(E,Vec<(Option<E>,Vec<S>)>), While(E,Box<S>), DoWhile(Box<S>,E), For(Option<Box<S>>,Option<E>,Option<E>,Box<S>), Break, Continue, Func(String,Vec<String>,Vec<S>), Ret(Option<E>) }
 struct Parser { t:Vec<Tok>, i:usize }
 impl Parser {
  fn new(t:Vec<Tok>)->Self{Self{t,i:0}} fn peek(&self)->&Tok{&self.t[self.i]} fn take(&mut self)->Tok{let x=self.peek().clone();if x!=Tok::Eof{self.i+=1;}x}
@@ -34,6 +34,7 @@ impl Parser {
   Tok::Let=>{self.take();let n=match self.take(){Tok::Id(n)=>n,x=>return Err(format!("Expected name, got {:?}",x))};self.need(Tok::Eq)?;let e=self.expr(0)?;self.eat(Tok::Semi);Ok(S::Decl(n,e))},
   Tok::Lb=>{self.take();let mut b=vec![];while *self.peek()!=Tok::Rb&&*self.peek()!=Tok::Eof{b.push(self.stmt()?);}self.need(Tok::Rb)?;Ok(S::Block(b))},
   Tok::If=>{self.take();self.need(Tok::Lp)?;let c=self.expr(0)?;self.need(Tok::Rp)?;let y=Box::new(self.stmt()?);let n=if self.eat(Tok::Else){Some(Box::new(self.stmt()?))}else{None};Ok(S::If(c,y,n))},
+  Tok::Switch=>{self.take();self.need(Tok::Lp)?;let value=self.expr(0)?;self.need(Tok::Rp)?;self.need(Tok::Lb)?;let mut cases=vec![];let mut has_default=false;while *self.peek()!=Tok::Rb&&*self.peek()!=Tok::Eof{let test=match self.take(){Tok::Case=>{let e=self.expr(0)?;self.need(Tok::Colon)?;Some(e)},Tok::Default=>{if has_default{return Err("SyntaxError: duplicate default clause".into());}has_default=true;self.need(Tok::Colon)?;None},x=>return Err(format!("Expected case or default, got {:?}",x))};let mut body=vec![];while !matches!(self.peek(),Tok::Case|Tok::Default|Tok::Rb|Tok::Eof){body.push(self.stmt()?);}cases.push((test,body));}self.need(Tok::Rb)?;Ok(S::Switch(value,cases))},
   Tok::While=>{self.take();self.need(Tok::Lp)?;let c=self.expr(0)?;self.need(Tok::Rp)?;Ok(S::While(c,Box::new(self.stmt()?)))},
   Tok::Do=>{self.take();let b=Box::new(self.stmt()?);self.need(Tok::While)?;self.need(Tok::Lp)?;let c=self.expr(0)?;self.need(Tok::Rp)?;self.eat(Tok::Semi);Ok(S::DoWhile(b,c))},
   Tok::For=>{self.take();self.need(Tok::Lp)?;let init=if self.eat(Tok::Semi){None}else{let st=self.stmt()?;Some(Box::new(st))};let cond=if *self.peek()==Tok::Semi{None}else{Some(self.expr(0)?)};self.need(Tok::Semi)?;let update=if *self.peek()==Tok::Rp{None}else{Some(self.expr(0)?)};self.need(Tok::Rp)?;Ok(S::For(init,cond,update,Box::new(self.stmt()?)))},
@@ -74,6 +75,7 @@ impl Engine{
   S::Expr(x)=>Ok(Flow::Val(Self::expr(x,e)?)),S::Decl(n,x)=>{let v=Self::expr(x,e.clone())?;Self::define(&e,n.clone(),v.clone());Ok(Flow::Val(v))},
   S::Block(b)=>Self::run(b,Self::child(e)),
   S::If(c,y,n)=>if Self::expr(c,e.clone())?.truth(){Self::stmt(y,e)}else if let Some(n)=n{Self::stmt(n,e)}else{Ok(Flow::Val(V::U))},
+  S::Switch(value,cases)=>{let value=Self::expr(value,e.clone())?;let mut selected=None;let mut default=None;for(i,(test,_))in cases.iter().enumerate(){if let Some(test)=test{if Self::strict_eq(&value,&Self::expr(test,e.clone())?){selected=Some(i);break;}}else{default=Some(i);}}let start=selected.or(default);let mut last=V::U;if let Some(start)=start{for(_,body)in cases.iter().skip(start){match Self::run(body,e.clone())?{Flow::Val(v)=>last=v,Flow::Break=>break,r@Flow::Ret(_)|r@Flow::Continue=>return Ok(r)}}}Ok(Flow::Val(last))},
   S::While(c,b)=>{let mut last=V::U;let mut count=0;while Self::expr(c,e.clone())?.truth(){count+=1;if count>100000{return Err("RangeError: loop limit exceeded".into());}match Self::stmt(b,e.clone())?{Flow::Val(v)=>last=v,Flow::Break=>break,Flow::Continue=>continue,r@Flow::Ret(_)=>return Ok(r)}}Ok(Flow::Val(last))},
   S::DoWhile(b,c)=>{let mut last=V::U;let mut count=0;loop{count+=1;if count>100000{return Err("RangeError: loop limit exceeded".into());}match Self::stmt(b,e.clone())?{Flow::Val(v)=>last=v,Flow::Break=>break,Flow::Continue=>{},r@Flow::Ret(_)=>return Ok(r)}if !Self::expr(c,e.clone())?.truth(){break;}}Ok(Flow::Val(last))},
   S::For(init,cond,update,b)=>{let local=Self::child(e);if let Some(i)=init{match Self::stmt(i,local.clone())?{Flow::Ret(v)=>return Ok(Flow::Ret(v)),Flow::Break|Flow::Continue=>return Err("SyntaxError: loop control in for initializer".into()),Flow::Val(_)=>{}}}let mut last=V::U;let mut count=0;loop{if let Some(c)=cond{if !Self::expr(c,local.clone())?.truth(){break;}}count+=1;if count>100000{return Err("RangeError: loop limit exceeded".into());}match Self::stmt(b,local.clone())?{Flow::Ret(v)=>return Ok(Flow::Ret(v)),Flow::Break=>break,Flow::Continue=>{if let Some(u)=update{Self::expr(u,local.clone())?;}continue;},Flow::Val(v)=>last=v}if let Some(u)=update{Self::expr(u,local.clone())?;}}Ok(Flow::Val(last))},
@@ -145,5 +147,8 @@ impl Engine{
 #[test]fn continue_for(){assert_eq!(Engine::new().eval("let n=0;for(let i=0;i<5;i++){if(i==2){continue;}n=n+1;}n").unwrap(),"4");}
 #[test]fn strict_equality(){assert_eq!(Engine::new().eval("1 === 1").unwrap(),"true");assert_eq!(Engine::new().eval("1 === '1'").unwrap(),"false");assert_eq!(Engine::new().eval("1 !== '1'").unwrap(),"true");}
 #[test]fn compound_assignments(){assert_eq!(Engine::new().eval("let x=10;x+=5;x-=3;x*=2;x/=4;x%=4;x").unwrap(),"2");assert_eq!(Engine::new().eval("let s='hello';s+=' world';s").unwrap(),"hello world");}
+
+#[test]fn switch_cases_and_default(){assert_eq!(Engine::new().eval("let x=2;let y=0;switch(x){case 1:y=10;break;case 2:y=20;break;default:y=30;}y").unwrap(),"20");assert_eq!(Engine::new().eval("let x=9;let y=0;switch(x){case 1:y=10;break;default:y=30;}y").unwrap(),"30");}
+#[test]fn switch_fallthrough(){assert_eq!(Engine::new().eval("let x=1;let y=0;switch(x){case 1:y+=1;case 2:y+=2;break;default:y=99;}y").unwrap(),"3");}
 
 }
