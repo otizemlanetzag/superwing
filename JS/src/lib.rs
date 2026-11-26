@@ -1,7 +1,7 @@
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
 #[derive(Clone, Debug, PartialEq)]
-enum Tok { Num(f64), Str(String), Id(String), Let, Fn, Return, If, Else, While, True, False, Null, Undef, Plus, Minus, Mul, Div, Eq, EqEq, Ne, Lt, Gt, Le, Ge, Bang, Lp, Rp, Lb, Rb, Ls, Rs, Semi, Comma, Dot, Eof }
+enum Tok { Num(f64), Str(String), Id(String), Let, Fn, Return, If, Else, While, True, False, Null, Undef, Plus, Minus, Mul, Div, Eq, EqEq, Ne, Lt, Gt, Le, Ge, Bang, Lp, Rp, Lb, Rb, Ls, Rs, Dot, Semi, Comma, Dot, Eof }
 
 fn lex(s: &str) -> Result<Vec<Tok>, String> {
     let c: Vec<char> = s.chars().collect(); let mut i=0; let mut out=vec![];
