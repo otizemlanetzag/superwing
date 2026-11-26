@@ -1,7 +1,7 @@
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
 #[derive(Clone, Debug, PartialEq)]
-enum Tok { Num(f64), Str(String), Id(String), Let, Fn, Return, If, Else, While, For, Break, Continue, Typeof, True, False, Null, Undef, Plus, Minus, Mul, Div, Eq, EqEq, Ne, StrictEq, StrictNe, And, Or, Lt, Gt, Le, Ge, Bang, Inc, Dec, Lp, Rp, Lb, Rb, Ls, Rs, Dot, Colon, Semi, Comma, Eof }
+enum Tok { Num(f64), Str(String), Id(String), Let, Fn, Return, If, Else, While, Do, For, Break, Continue, Typeof, True, False, Null, Undef, Plus, Minus, Mul, Div, Mod, Eq, Question, EqEq, Ne, StrictEq, StrictNe, And, Or, Lt, Gt, Le, Ge, Bang, Inc, Dec, Lp, Rp, Lb, Rb, Ls, Rs, Dot, Colon, Semi, Comma, Eof }
 
 fn lex(s: &str) -> Result<Vec<Tok>, String> {
     let c: Vec<char> = s.chars().collect(); let mut i=0; let mut out=vec![];
@@ -10,20 +10,20 @@ fn lex(s: &str) -> Result<Vec<Tok>, String> {
         if c[i]=='/' && c.get(i+1)==Some(&'/') { while i<c.len() && c[i]!='\n' {i+=1;} continue; }
         if c[i].is_ascii_digit() { let st=i; i+=1; while i<c.len() && (c[i].is_ascii_digit()||c[i]=='.') {i+=1;} out.push(Tok::Num(c[st..i].iter().collect::<String>().parse().map_err(|_|"Invalid number")?)); continue; }
         if c[i]=='"' || c[i]=='\'' { let q=c[i]; i+=1; let mut v=String::new(); while i<c.len() && c[i]!=q { if c[i]=='\\' && i+1<c.len() {i+=1; v.push(match c[i] {'n'=>'\n','t'=>'\t',x=>x});} else {v.push(c[i]);} i+=1; } if i==c.len(){return Err("Unterminated string".into());} i+=1; out.push(Tok::Str(v)); continue; }
-        if c[i].is_ascii_alphabetic()||c[i]=='_'||c[i]=='$' {let st=i;i+=1;while i<c.len()&&(c[i].is_ascii_alphanumeric()||c[i]=='_'||c[i]=='$'){i+=1;} let w:String=c[st..i].iter().collect(); out.push(match w.as_str(){"let"|"const"|"var"=>Tok::Let,"function"=>Tok::Fn,"return"=>Tok::Return,"if"=>Tok::If,"else"=>Tok::Else,"while"=>Tok::While,"for"=>Tok::For,"break"=>Tok::Break,"continue"=>Tok::Continue,"typeof"=>Tok::Typeof,"true"=>Tok::True,"false"=>Tok::False,"null"=>Tok::Null,"undefined"=>Tok::Undef,_=>Tok::Id(w)});continue;}
+        if c[i].is_ascii_alphabetic()||c[i]=='_'||c[i]=='$' {let st=i;i+=1;while i<c.len()&&(c[i].is_ascii_alphanumeric()||c[i]=='_'||c[i]=='$'){i+=1;} let w:String=c[st..i].iter().collect(); out.push(match w.as_str(){"let"|"const"|"var"=>Tok::Let,"function"=>Tok::Fn,"return"=>Tok::Return,"if"=>Tok::If,"else"=>Tok::Else,"while"=>Tok::While,"do"=>Tok::Do,"for"=>Tok::For,"break"=>Tok::Break,"continue"=>Tok::Continue,"typeof"=>Tok::Typeof,"true"=>Tok::True,"false"=>Tok::False,"null"=>Tok::Null,"undefined"=>Tok::Undef,_=>Tok::Id(w)});continue;}
         let three=if i+2<c.len(){format!("{}{}{}",c[i],c[i+1],c[i+2])}else{String::new()};
         if three=="==="{out.push(Tok::StrictEq);i+=3;continue;} if three=="!=="{out.push(Tok::StrictNe);i+=3;continue;}
         let two=if i+1<c.len(){format!("{}{}",c[i],c[i+1])}else{String::new()};
         if two=="&&"{out.push(Tok::And);i+=2;continue;} if two=="||"{out.push(Tok::Or);i+=2;continue;}
         if two=="==" {out.push(Tok::EqEq);i+=2;continue;} if two=="!=" {out.push(Tok::Ne);i+=2;continue;} if two=="<=" {out.push(Tok::Le);i+=2;continue;} if two==">=" {out.push(Tok::Ge);i+=2;continue;} if two=="++" {out.push(Tok::Inc);i+=2;continue;} if two=="--" {out.push(Tok::Dec);i+=2;continue;}
-        out.push(match c[i]{'+'=>Tok::Plus,'-'=>Tok::Minus,'*'=>Tok::Mul,'/'=>Tok::Div,'='=>Tok::Eq,'<'=>Tok::Lt,'>'=>Tok::Gt,'!'=>Tok::Bang,'('=>Tok::Lp,')'=>Tok::Rp,'{'=>Tok::Lb,'}'=>Tok::Rb,'['=>Tok::Ls,']'=>Tok::Rs,';'=>Tok::Semi,','=>Tok::Comma,'.'=>Tok::Dot,':'=>Tok::Colon,x=>return Err(format!("Unexpected character: {x}"))});i+=1;
+        out.push(match c[i]{'+'=>Tok::Plus,'-'=>Tok::Minus,'*'=>Tok::Mul,'/'=>Tok::Div,'%'=>Tok::Mod,'?'=>Tok::Question,'='=>Tok::Eq,'<'=>Tok::Lt,'>'=>Tok::Gt,'!'=>Tok::Bang,'('=>Tok::Lp,')'=>Tok::Rp,'{'=>Tok::Lb,'}'=>Tok::Rb,'['=>Tok::Ls,']'=>Tok::Rs,';'=>Tok::Semi,','=>Tok::Comma,'.'=>Tok::Dot,':'=>Tok::Colon,x=>return Err(format!("Unexpected character: {x}"))});i+=1;
     } out.push(Tok::Eof); Ok(out)
 }
 
 #[derive(Clone)]
-enum E { N(f64), S(String), B(bool), Null, U, Var(String), Typeof(Box<E>), Update(String,i8,bool), Array(Vec<E>), Object(Vec<(String,E)>), Index(Box<E>,Box<E>), Property(Box<E>,String), SetIndex(Box<E>,Box<E>,Box<E>), SetProperty(Box<E>,String,Box<E>), Unary(Tok,Box<E>), Bin(Box<E>,Tok,Box<E>), Set(String,Box<E>), Call(Box<E>,Vec<E>) }
+enum E { N(f64), S(String), B(bool), Null, U, Var(String), Typeof(Box<E>), Update(String,i8,bool), Array(Vec<E>), Object(Vec<(String,E)>), Index(Box<E>,Box<E>), Property(Box<E>,String), SetIndex(Box<E>,Box<E>,Box<E>), SetProperty(Box<E>,String,Box<E>), Unary(Tok,Box<E>), Bin(Box<E>,Tok,Box<E>), Conditional(Box<E>,Box<E>,Box<E>), Set(String,Box<E>), Call(Box<E>,Vec<E>) }
 #[derive(Clone)]
-enum S { Expr(E), Decl(String,E), Block(Vec<S>), If(E,Box<S>,Option<Box<S>>), While(E,Box<S>), For(Option<Box<S>>,Option<E>,Option<E>,Box<S>), Break, Continue, Func(String,Vec<String>,Vec<S>), Ret(Option<E>) }
+enum S { Expr(E), Decl(String,E), Block(Vec<S>), If(E,Box<S>,Option<Box<S>>), While(E,Box<S>), DoWhile(Box<S>,E), For(Option<Box<S>>,Option<E>,Option<E>,Box<S>), Break, Continue, Func(String,Vec<String>,Vec<S>), Ret(Option<E>) }
 struct Parser { t:Vec<Tok>, i:usize }
 impl Parser {
  fn new(t:Vec<Tok>)->Self{Self{t,i:0}} fn peek(&self)->&Tok{&self.t[self.i]} fn take(&mut self)->Tok{let x=self.peek().clone();if x!=Tok::Eof{self.i+=1;}x}
@@ -35,6 +35,7 @@ impl Parser {
   Tok::Lb=>{self.take();let mut b=vec![];while *self.peek()!=Tok::Rb&&*self.peek()!=Tok::Eof{b.push(self.stmt()?);}self.need(Tok::Rb)?;Ok(S::Block(b))},
   Tok::If=>{self.take();self.need(Tok::Lp)?;let c=self.expr(0)?;self.need(Tok::Rp)?;let y=Box::new(self.stmt()?);let n=if self.eat(Tok::Else){Some(Box::new(self.stmt()?))}else{None};Ok(S::If(c,y,n))},
   Tok::While=>{self.take();self.need(Tok::Lp)?;let c=self.expr(0)?;self.need(Tok::Rp)?;Ok(S::While(c,Box::new(self.stmt()?)))},
+  Tok::Do=>{self.take();let b=Box::new(self.stmt()?);self.need(Tok::While)?;self.need(Tok::Lp)?;let c=self.expr(0)?;self.need(Tok::Rp)?;self.eat(Tok::Semi);Ok(S::DoWhile(b,c))},
   Tok::For=>{self.take();self.need(Tok::Lp)?;let init=if self.eat(Tok::Semi){None}else{let st=self.stmt()?;Some(Box::new(st))};let cond=if *self.peek()==Tok::Semi{None}else{Some(self.expr(0)?)};self.need(Tok::Semi)?;let update=if *self.peek()==Tok::Rp{None}else{Some(self.expr(0)?)};self.need(Tok::Rp)?;Ok(S::For(init,cond,update,Box::new(self.stmt()?)))},
   Tok::Break=>{self.take();self.eat(Tok::Semi);Ok(S::Break)},
   Tok::Continue=>{self.take();self.eat(Tok::Semi);Ok(S::Continue)},
@@ -42,13 +43,13 @@ impl Parser {
   Tok::Return=>{self.take();let e=if *self.peek()==Tok::Semi||*self.peek()==Tok::Rb||*self.peek()==Tok::Eof{None}else{Some(self.expr(0)?)};self.eat(Tok::Semi);Ok(S::Ret(e))},
   _=>{let e=self.expr(0)?;self.eat(Tok::Semi);Ok(S::Expr(e))}
  }}
- fn prec(t:&Tok)->u8{match t{Tok::Eq=>1,Tok::Or=>2,Tok::And=>3,Tok::EqEq|Tok::Ne|Tok::StrictEq|Tok::StrictNe=>4,Tok::Lt|Tok::Gt|Tok::Le|Tok::Ge=>5,Tok::Plus|Tok::Minus=>6,Tok::Mul|Tok::Div=>7,_=>0}}
+ fn prec(t:&Tok)->u8{match t{Tok::Eq=>1,Tok::Or=>2,Tok::And=>3,Tok::EqEq|Tok::Ne|Tok::StrictEq|Tok::StrictNe=>4,Tok::Lt|Tok::Gt|Tok::Le|Tok::Ge=>5,Tok::Plus|Tok::Minus=>6,Tok::Mul|Tok::Div|Tok::Mod=>7,_=>0}}
  fn expr(&mut self,min:u8)->Result<E,String>{let mut a=match self.take(){Tok::Num(n)=>E::N(n),Tok::Str(s)=>E::S(s),Tok::True=>E::B(true),Tok::False=>E::B(false),Tok::Null=>E::Null,Tok::Undef=>E::U,Tok::Id(n)=>E::Var(n),Tok::Ls=>{let mut a=vec![];if *self.peek()!=Tok::Rs{loop{a.push(self.expr(0)?);if !self.eat(Tok::Comma){break;}}}self.need(Tok::Rs)?;E::Array(a)},Tok::Lb=>{let mut props=vec![];if *self.peek()!=Tok::Rb{loop{let key=match self.take(){Tok::Id(k)|Tok::Str(k)=>k,x=>return Err(format!("Expected object key, got {:?}",x))};self.need(Tok::Colon)?;let value=self.expr(0)?;props.push((key,value));if !self.eat(Tok::Comma){break;}}}self.need(Tok::Rb)?;E::Object(props)},Tok::Minus|Tok::Bang|Tok::Typeof|Tok::Inc|Tok::Dec=>{let op=self.t[self.i-1].clone();match op{Tok::Typeof=>E::Typeof(Box::new(self.expr(7)?)),Tok::Inc|Tok::Dec=>{let name=match self.expr(7)?{E::Var(n)=>n,_=>return Err("Increment target must be a variable".into())};E::Update(name,if op==Tok::Inc{1}else{-1},true)},_=>E::Unary(op,Box::new(self.expr(7)?))}},Tok::Lp=>{let x=self.expr(0)?;self.need(Tok::Rp)?;x},x=>return Err(format!("Unexpected expression token: {:?}",x))};
   loop{if (*self.peek()==Tok::Inc||*self.peek()==Tok::Dec)&&min<=8{let op=self.take();let name=match a{E::Var(n)=>n,_=>return Err("Increment target must be a variable".into())};a=E::Update(name,if op==Tok::Inc{1}else{-1},false);continue;}
   if *self.peek()==Tok::Lp{if min>7{break;}self.take();let mut args=vec![];if *self.peek()!=Tok::Rp{loop{args.push(self.expr(0)?);if !self.eat(Tok::Comma){break;}}}self.need(Tok::Rp)?;a=E::Call(Box::new(a),args);continue;}
    if *self.peek()==Tok::Ls {if min>8{break;}self.take();let idx=self.expr(0)?;self.need(Tok::Rs)?;a=E::Index(Box::new(a),Box::new(idx));continue;}
    if *self.peek()==Tok::Dot {if min>8{break;}self.take();let name=match self.take(){Tok::Id(n)=>n,x=>return Err(format!("Expected property name, got {:?}",x))};a=E::Property(Box::new(a),name);continue;}
-   let p=Self::prec(self.peek());if p==0||p<min{break;}let op=self.take();let b=self.expr(if op==Tok::Eq{p}else{p+1})?;a=if op==Tok::Eq{match a{E::Var(n)=>E::Set(n,Box::new(b)),E::Index(obj,idx)=>E::SetIndex(obj,idx,Box::new(b)),E::Property(obj,key)=>E::SetProperty(obj,key,Box::new(b)),_=>return Err("Invalid assignment target".into())}}else{E::Bin(Box::new(a),op,Box::new(b))};}Ok(a)
+   if *self.peek()==Tok::Question && min<=1{self.take();let yes=self.expr(0)?;self.need(Tok::Colon)?;let no=self.expr(1)?;a=E::Conditional(Box::new(a),Box::new(yes),Box::new(no));continue;}let p=Self::prec(self.peek());if p==0||p<min{break;}let op=self.take();let b=self.expr(if op==Tok::Eq{p}else{p+1})?;a=if op==Tok::Eq{match a{E::Var(n)=>E::Set(n,Box::new(b)),E::Index(obj,idx)=>E::SetIndex(obj,idx,Box::new(b)),E::Property(obj,key)=>E::SetProperty(obj,key,Box::new(b)),_=>return Err("Invalid assignment target".into())}}else{E::Bin(Box::new(a),op,Box::new(b))};}Ok(a)
  }
 }
 type Env=Rc<RefCell<Scope>>;
@@ -74,6 +75,7 @@ impl Engine{
   S::Block(b)=>Self::run(b,Self::child(e)),
   S::If(c,y,n)=>if Self::expr(c,e.clone())?.truth(){Self::stmt(y,e)}else if let Some(n)=n{Self::stmt(n,e)}else{Ok(Flow::Val(V::U))},
   S::While(c,b)=>{let mut last=V::U;let mut count=0;while Self::expr(c,e.clone())?.truth(){count+=1;if count>100000{return Err("RangeError: loop limit exceeded".into());}match Self::stmt(b,e.clone())?{Flow::Val(v)=>last=v,Flow::Break=>break,Flow::Continue=>continue,r@Flow::Ret(_)=>return Ok(r)}}Ok(Flow::Val(last))},
+  S::DoWhile(b,c)=>{let mut last=V::U;let mut count=0;loop{count+=1;if count>100000{return Err("RangeError: loop limit exceeded".into());}match Self::stmt(b,e.clone())?{Flow::Val(v)=>last=v,Flow::Break=>break,Flow::Continue=>{},r@Flow::Ret(_)=>return Ok(r)}if !Self::expr(c,e.clone())?.truth(){break;}}Ok(Flow::Val(last))},
   S::For(init,cond,update,b)=>{let local=Self::child(e);if let Some(i)=init{match Self::stmt(i,local.clone())?{Flow::Ret(v)=>return Ok(Flow::Ret(v)),Flow::Break|Flow::Continue=>return Err("SyntaxError: loop control in for initializer".into()),Flow::Val(_)=>{}}}let mut last=V::U;let mut count=0;loop{if let Some(c)=cond{if !Self::expr(c,local.clone())?.truth(){break;}}count+=1;if count>100000{return Err("RangeError: loop limit exceeded".into());}match Self::stmt(b,local.clone())?{Flow::Ret(v)=>return Ok(Flow::Ret(v)),Flow::Break=>break,Flow::Continue=>{if let Some(u)=update{Self::expr(u,local.clone())?;}continue;},Flow::Val(v)=>last=v}if let Some(u)=update{Self::expr(u,local.clone())?;}}Ok(Flow::Val(last))},
   S::Func(n,p,b)=>{let f=V::Fn(Rc::new(Fun{p:p.clone(),b:b.clone(),env:e.clone()}));Self::define(&e,n.clone(),f.clone());Ok(Flow::Val(f))},
   S::Break=>Ok(Flow::Break),S::Continue=>Ok(Flow::Continue),
@@ -102,6 +104,7 @@ impl Engine{
   E::Set(n,x)=>{let v=Self::expr(x,e.clone())?;Self::set(&e,n,v)},
   E::Unary(op,x)=>{let v=Self::expr(x,e)?;match op{Tok::Minus=>Ok(V::N(-v.num()?)),Tok::Bang=>Ok(V::B(!v.truth())),_=>unreachable!()}},
   E::Call(f,args)=>{let f=Self::expr(f,e.clone())?;let a=args.iter().map(|x|Self::expr(x,e.clone())).collect::<Result<Vec<_>,_>>()?;match f{V::Fn(fun)=>{let local=Self::child(fun.env.clone());for(i,p)in fun.p.iter().enumerate(){Self::define(&local,p.clone(),a.get(i).cloned().unwrap_or(V::U));}match Self::run(&fun.b,local)?{Flow::Val(_)=>Ok(V::U),Flow::Ret(v)=>Ok(v)}},V::Native(native)=>match native.kind{NativeKind::Push=>{let mut arr=native.array.borrow_mut();for v in a{arr.push(v);}Ok(V::N(arr.len() as f64))},NativeKind::Pop=>Ok(native.array.borrow_mut().pop().unwrap_or(V::U))},_=>Err("TypeError: value is not callable".into())}},
+  E::Conditional(c,y,n)=>if Self::expr(c,e.clone())?.truth(){Self::expr(y,e)}else{Self::expr(n,e)},
   E::Bin(a,op,b)=>{
    let l=Self::expr(a,e.clone())?;
    if *op==Tok::And && !l.truth(){return Ok(l);}
@@ -111,7 +114,7 @@ impl Engine{
    Tok::And=>Ok(r),Tok::Or=>Ok(r),
    Tok::StrictEq=>Ok(V::B(Self::strict_eq(&l,&r))),Tok::StrictNe=>Ok(V::B(!Self::strict_eq(&l,&r))),
    Tok::Plus if matches!(&l,V::S(_))||matches!(&r,V::S(_))=>Ok(V::S(format!("{}{}",l.show(),r.show()))),
-   Tok::Plus=>Ok(V::N(l.num()?+r.num()?)),Tok::Minus=>Ok(V::N(l.num()?-r.num()?)),Tok::Mul=>Ok(V::N(l.num()?*r.num()?)),Tok::Div=>Ok(V::N(l.num()?/r.num()?)),
+   Tok::Plus=>Ok(V::N(l.num()?+r.num()?)),Tok::Minus=>Ok(V::N(l.num()?-r.num()?)),Tok::Mul=>Ok(V::N(l.num()?*r.num()?)),Tok::Div=>Ok(V::N(l.num()?/r.num()?)),Tok::Mod=>Ok(V::N(l.num()?%r.num()?)),
    Tok::EqEq=>Ok(V::B(l.show()==r.show())),Tok::Ne=>Ok(V::B(l.show()!=r.show())),
    Tok::Lt=>Ok(V::B(l.num()?<r.num()?)),Tok::Gt=>Ok(V::B(l.num()?>r.num()?)),Tok::Le=>Ok(V::B(l.num()?<=r.num()?)),Tok::Ge=>Ok(V::B(l.num()?>=r.num()?)),_=>Err("Unsupported operator".into())
   }}
@@ -134,6 +137,9 @@ impl Engine{
 #[test]fn for_loop(){assert_eq!(Engine::new().eval("let total=0;for(let i=0;i<4;i++){total=total+i;}total").unwrap(),"6");}
 #[test]fn logical_short_circuit(){assert_eq!(Engine::new().eval("let x=0;false && (x=1);true || (x=2);x").unwrap(),"0");}
 #[test]fn logical_values(){assert_eq!(Engine::new().eval("0 || 'fallback'").unwrap(),"fallback");assert_eq!(Engine::new().eval("'yes' && 9").unwrap(),"9");}
+#[test]fn ternary_operator(){assert_eq!(Engine::new().eval("let x=4; x>2 ? 'big' : 'small'").unwrap(),"big");}
+#[test]fn modulo_operator(){assert_eq!(Engine::new().eval("17%5").unwrap(),"2");}
+#[test]fn do_while_loop(){assert_eq!(Engine::new().eval("let i=0;do{i++;}while(i<3);i").unwrap(),"3");}
 #[test]fn break_while(){assert_eq!(Engine::new().eval("let i=0;while(true){i++;if(i==3){break;}}i").unwrap(),"3");}
 #[test]fn continue_for(){assert_eq!(Engine::new().eval("let n=0;for(let i=0;i<5;i++){if(i==2){continue;}n=n+1;}n").unwrap(),"4");}\n#[test]fn strict_equality(){assert_eq!(Engine::new().eval("1 === 1").unwrap(),"true");assert_eq!(Engine::new().eval("1 === '1'").unwrap(),"false");assert_eq!(Engine::new().eval("1 !== '1'").unwrap(),"true");}
 }
